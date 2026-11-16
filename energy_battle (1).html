@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ENERGY BATTLE — Интерактивті Тақта нұсқасы (25 сұрақ)</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@600;700&family=Nunito:wght@600;700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js 3D Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            blue: '#0284c7',
+                            cyan: '#06b6d4',
+                            orange: '#f97316',
+                            purple: '#8b5cf6',
+                            mint: '#10b981',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e',
+                            cream: '#f8fafc'
+                        }
+                    },
+                    fontFamily: {
+                        heading: ['Comfortaa', 'cursive', 'sans-serif'],
+                        sans: ['Nunito', 'sans-serif'],
+                        mono: ['Space Grotesk', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: linear-gradient(135deg, #f0f7ff 0%, #eef2ff 50%, #fff7ed 100%);
+            color: #0f172a;
+            font-family: 'Nunito', sans-serif;
+            min-height: 100vh;
+            touch-action: manipulation;
+        }
+
+        /* Ашық акрилді әйнек (Light Glassmorphism) стилі */
+        .board-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.95);
+            box-shadow: 0 16px 36px -8px rgba(14, 116, 144, 0.12), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Интерактивті тақтаға бейімделген сенсорлық батырмалар */
+        .touch-action-btn {
+            box-shadow: 0 8px 20px -4px rgba(2, 132, 199, 0.35);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .touch-action-btn:active {
+            transform: scale(0.96);
+        }
+
+        /* Оқушы таңдайтын жауап батырмалары (Smart Board UI) */
+        .touch-option {
+            background: #ffffff;
+            border: 2.5px solid #e2e8f0;
+            box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+            transition: all 0.2s ease;
+        }
+        .touch-option:hover:not(:disabled) {
+            border-color: #0284c7;
+            background: #f0f9ff;
+            transform: translateY(-2px);
+        }
+        .touch-option:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        /* Дұрыс және Қате жауап күйлері */
+        .option-correct {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+            border-color: #16a34a !important;
+            color: #14532d !important;
+            box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.25) !important;
+            animation: bounceIn 0.35s ease;
+        }
+        .option-wrong {
+            background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+            border-color: #e11d48 !important;
+            color: #881337 !important;
+            box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.25) !important;
+            animation: shake 0.35s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.97); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        /* Тақта бетіне жазу салатын қабат */
+        #drawingCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 999;
+        }
+        #drawingCanvas.pen-active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body class="relative flex flex-col justify-between min-h-screen text-slate-800 selection:bg-brand-blue selection:text-white">
+
+    <!-- Экран үстінен жазу құралы (Маркер / Өшіргіш) -->
+    <canvas id="drawingCanvas"></canvas>
+
+    <!-- ИНТЕРАКТИВТІ ТАҚТА ҚҰРАЛДАРЫ (Toolbar) -->
+    <div class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur-md p-2 rounded-2xl border-2 border-brand-blue/30 shadow-2xl">
+        <button id="penToggleBtn" onclick="toggleBoardPen()" title="Тақтада қаламмен белгілеу" class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-slate-600 hover:text-brand-blue hover:bg-sky-50 transition-all border border-slate-200">
+            <i class="fa-solid fa-pen-fancy text-xl"></i>
+        </button>
+        <div id="penColorGroup" class="hidden flex items-center gap-1.5 px-1">
+            <button onclick="setPenColor('#ef4444')" class="w-7 h-7 rounded-full bg-red-500 border-2 border-white shadow-sm"></button>
+            <button onclick="setPenColor('#0284c7')" class="w-7 h-7 rounded-full bg-sky-600 border-2 border-white shadow-sm"></button>
+            <button onclick="setPenColor('#10b981')" class="w-7 h-7 rounded-full bg-emerald-500 border-2 border-white shadow-sm"></button>
+            <button onclick="clearBoardDrawings()" title="Тақтадағы жазуды тазалау" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center text-sm font-bold">
+                <i class="fa-solid fa-eraser"></i>
+            </button>
+        </div>
+        <button onclick="toggleFullScreen()" title="Толық экран" class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-slate-600 hover:text-brand-purple hover:bg-purple-50 transition-all border border-slate-200">
+            <i class="fa-solid fa-expand text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Жоғарғы Навигациялық Баған (Header) -->
+    <header class="relative z-30 w-full px-4 sm:px-8 py-3 flex items-center justify-between bg-white/80 backdrop-blur-md border-b-2 border-slate-200 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-brand-orange via-brand-purple to-brand-blue flex items-center justify-center shadow-md shadow-brand-blue/30 text-white">
+                <i class="fa-solid fa-bolt text-xl animate-bounce" style="animation-duration: 2.5s;"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-heading font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-blue via-brand-purple to-brand-orange text-xl sm:text-2xl tracking-tight">ENERGY BATTLE</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-brand-blue border border-sky-300">8-СЫНЫП</span>
+                </div>
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Интерактивті тақтаға арналған ашық тест-ойын</div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Дыбыс батырмасы -->
+            <button id="soundToggleBtn" onclick="toggleAudio()" class="w-11 h-11 rounded-xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center text-slate-700 hover:bg-sky-100 hover:border-brand-blue hover:text-brand-blue transition-all">
+                <i id="soundIcon" class="fa-solid fa-volume-high text-lg"></i>
+            </button>
+            
+            <!-- Сұрақ санауышы -->
+            <div id="topCounterBadge" class="hidden items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-50 border-2 border-sky-200 font-mono text-sm shadow-sm">
+                <i class="fa-regular fa-circle-question text-brand-blue font-bold text-base"></i>
+                <span class="text-slate-500 font-bold">Сұрақ:</span>
+                <span id="currentQNumBadge" class="font-black text-brand-blue text-base">1</span>
+                <span class="text-slate-400">/ 25</span>
+            </div>
+
+            <!-- Ұпай белгісі -->
+            <div id="topScoreBadge" class="hidden items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border-2 border-emerald-300 font-mono text-sm shadow-sm">
+                <i class="fa-solid fa-star text-amber-500 text-base"></i>
+                <span class="text-slate-600 font-bold">Ұпай:</span>
+                <span id="scoreBadgeValue" class="font-black text-emerald-600 text-lg">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Негізгі Блок -->
+    <main class="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 md:p-8 max-w-7xl mx-auto w-full">
+        
+        <!-- ================= 1. БАСТЫ БЕТ ================= -->
+        <section id="startScreen" class="w-full flex flex-col lg:flex-row items-center justify-between gap-6 py-2">
+            <div class="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left space-y-4">
+                
+                <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-sky-100 border border-sky-300 text-brand-blue text-xs font-extrabold uppercase shadow-sm">
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-cyan animate-ping"></span>
+                    СЫНЫПТА ТАҚТАМЕН ЖҰМЫС • 25 СҰРАҚ
+                </div>
+
+                <h1 class="font-heading font-black text-3xl sm:text-5xl text-slate-900 leading-tight">
+                    ENERGY <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange via-brand-purple to-brand-blue">BATTLE</span>
+                </h1>
+
+                <p class="text-lg sm:text-2xl font-bold text-sky-900 leading-relaxed max-w-xl">
+                    «Энергияны қаншалықты тиімді пайдалана аласың?»
+                </p>
+
+                <p class="text-slate-600 text-sm sm:text-base leading-relaxed max-w-lg font-medium">
+                    Жылу қозғалтқыштары, құрылысы, түрлері мен ПӘК тақырыбы бойынша интерактивті сұрақтар. Оқушылар кезекпен тақтаға шығып өз білімін сынай алады!
+                </p>
+
+                <!-- Оқушы есімін енгізу -->
+                <div class="w-full max-w-md bg-white p-2.5 rounded-2xl border-2 border-slate-200 shadow-sm flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-100 text-brand-blue flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-user-graduate text-lg"></i>
+                    </div>
+                    <input type="text" id="studentNameInput" placeholder="Оқушының немесе топтың аты..." class="w-full bg-transparent border-none outline-none font-bold text-slate-700 placeholder-slate-400 text-base" value="8-Сынып Оқушысы">
+                </div>
+
+                <!-- Бастау батырмасы -->
+                <div class="pt-2 w-full sm:w-auto">
+                    <button onclick="startGame()" class="touch-action-btn w-full sm:w-auto px-10 py-4.5 rounded-3xl bg-gradient-to-r from-brand-orange via-brand-purple to-brand-blue font-heading font-black text-lg text-white tracking-wider uppercase flex items-center justify-center gap-3 cursor-pointer hover:opacity-95">
+                        <span>ОЙЫНДЫ БАСТАУ (25 СҰРАҚ)</span>
+                        <i class="fa-solid fa-arrow-right text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3D Турбина Мен Жылу Қозғалтқышы (ТУРА ОРТАДА, ТОЛЫҚ КӨРІНЕДІ) -->
+            <div class="lg:w-1/2 flex flex-col items-center justify-center w-full">
+                <div class="relative w-full max-w-[420px] h-[340px] rounded-3xl overflow-hidden board-card border-4 border-white shadow-xl flex flex-col items-center justify-center">
+                    
+                    <!-- 3D Canvas орталықтанған -->
+                    <canvas id="hero3DCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+                    <!-- Төменгі индикатор -->
+                    <div class="absolute bottom-2.5 left-2.5 right-2.5 py-1.5 px-3 rounded-xl bg-white/95 backdrop-blur-md border border-slate-200 flex items-center justify-between text-xs font-bold text-slate-700 shadow-sm">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-hand-pointer text-brand-blue animate-bounce"></i>
+                            Тақтада саусақпен бұрыңыз
+                        </span>
+                        <span class="text-brand-orange font-mono">Қуат: 100%</span>
+                    </div>
+
+                    <!-- Белгі -->
+                    <div class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-white/95 border border-sky-300 text-[11px] font-mono font-bold text-brand-blue shadow-sm">
+                        3D ТУРБИНА ҚОНДЫРҒЫСЫ
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 2. ТЕСТ КАРТОЧКАСЫ (QUIZ SCREEN) ================= -->
+        <section id="quizScreen" class="hidden w-full max-w-5xl flex flex-col gap-4 py-1">
+            
+            <!-- Тақта Прогресс жолағы -->
+            <div class="w-full board-card p-3 sm:p-4 rounded-2xl flex flex-col gap-2">
+                <div class="flex items-center justify-between text-sm sm:text-base font-bold text-slate-600">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-brand-cyan animate-pulse"></span>
+                        <span>ПӘК КӨРСЕТКІШІ: <strong id="progressPercentage" class="text-brand-blue">4%</strong></span>
+                    </div>
+                    <span id="currentStepText" class="text-slate-800 font-mono">1-сұрақ / 25</span>
+                </div>
+                <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden p-0.5 border border-slate-300">
+                    <div id="progressBarFill" class="h-full rounded-full bg-gradient-to-r from-brand-orange via-brand-purple to-brand-blue transition-all duration-300 ease-out shadow-sm" style="width: 4%;"></div>
+                </div>
+            </div>
+
+            <!-- Сұрақ және Иллюстрация блогы -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                
+                <!-- Сол жақ: Сұрақ мәтіні және Сенсорлық Үлкен Нұсқалар -->
+                <div class="lg:col-span-7 flex flex-col justify-between board-card p-5 sm:p-7 rounded-3xl border-2 border-slate-200/80">
+                    <div>
+                        <!-- Тегтер -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <span id="questionCategory" class="px-3 py-0.5 rounded-lg bg-sky-100 border border-sky-300 text-brand-blue text-xs font-extrabold uppercase">
+                                НЕГІЗГІ ҰҒЫМ
+                            </span>
+                        </div>
+
+                        <!-- Сұрақ атауы -->
+                        <h2 id="questionText" class="font-heading font-black text-lg sm:text-2xl text-slate-900 leading-snug mb-4">
+                            Сұрақ мәтіні...
+                        </h2>
+
+                        <!-- 4 Жауап нұсқасы -->
+                        <div id="answersGrid" class="flex flex-col gap-2.5 my-2">
+                            <!-- JS арқылы салынады -->
+                        </div>
+                    </div>
+
+                    <!-- Түсіндірме кері байланыс блогы -->
+                    <div id="explanationBanner" class="hidden mt-2 p-3 sm:p-4 rounded-2xl border-2 flex items-start gap-3 transition-all">
+                        <i id="explanationIcon" class="fa-solid fa-circle-check text-2xl mt-0.5"></i>
+                        <div class="text-sm sm:text-base">
+                            <div id="explanationTitle" class="font-heading font-black uppercase mb-0.5">Дұрыс Жауап!</div>
+                            <div id="explanationBody" class="text-slate-700 font-semibold leading-relaxed">Түсіндірме мәтіні.</div>
+                        </div>
+                    </div>
+
+                    <!-- Төменгі басқару түймелері -->
+                    <div class="flex items-center justify-between pt-4 mt-3 border-t-2 border-slate-100 gap-3">
+                        <button id="prevBtn" onclick="prevQuestion()" class="px-5 py-3 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-sm sm:text-base flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Алдыңғы</span>
+                        </button>
+
+                        <button id="nextBtn" onclick="nextQuestion()" disabled class="touch-action-btn px-7 py-3 rounded-2xl font-heading font-black text-sm sm:text-base uppercase text-white bg-gradient-to-r from-brand-orange to-brand-blue flex items-center gap-3 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span id="nextBtnText">КЕЛЕСІ СҰРАҚ</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Оң жақ: Ашық көрнекі иллюстрация -->
+                <div class="lg:col-span-5 flex flex-col items-center justify-center board-card p-4 sm:p-6 rounded-3xl border-2 border-slate-200/80 relative overflow-hidden min-h-[300px]">
+                    <div id="visualDisplayContainer" class="w-full h-full flex flex-col items-center justify-center relative">
+                        <!-- Сұраққа сәйкес SVG сурет -->
+                    </div>
+
+                    <div id="visualCaption" class="mt-2 text-center text-xs font-mono font-bold text-brand-blue tracking-wider uppercase">
+                        FIG 1.0 — КӨРНЕКІ СХЕМА
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= 3. ҚОРЫТЫНДЫ БЕТ ================= -->
+        <section id="resultsScreen" class="hidden w-full max-w-4xl flex flex-col items-center justify-center text-center py-4">
+            <div class="w-full board-card p-6 sm:p-10 rounded-3xl border-4 border-white relative overflow-hidden shadow-2xl">
+                
+                <div id="resultBadgeIcon" class="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-tr from-brand-orange via-brand-purple to-brand-blue flex items-center justify-center shadow-lg shadow-brand-blue/30 text-white">
+                    <i id="badgeFaIcon" class="fa-solid fa-crown text-3xl"></i>
+                </div>
+
+                <div id="studentNameDisplay" class="text-sm font-bold text-brand-purple uppercase tracking-widest mb-1">
+                    8-СЫНЫП ҚАТЫСУШЫСЫ
+                </div>
+
+                <h2 id="resultRankTitle" class="font-heading font-black text-2xl sm:text-4xl text-slate-900 mb-2">
+                    ЭНЕРГИЯ САРАПШЫСЫ!
+                </h2>
+
+                <p id="resultRankSubtitle" class="text-sm sm:text-lg text-slate-600 font-semibold max-w-lg mx-auto mb-6">
+                    Сіз жылу қозғалтқыштарының жұмысын өте жақсы меңгердіңіз!
+                </p>
+
+                <!-- Нәтижелер көрсеткіші -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto mb-6">
+                    <div class="p-4 rounded-2xl bg-sky-50 border-2 border-sky-200 flex flex-col items-center">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider mb-1">Жинаған Ұпай</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="finalScoreNumber" class="font-heading font-black text-4xl text-brand-blue">25</span>
+                            <span class="font-heading text-lg text-slate-400">/ 25</span>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 flex flex-col items-center">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider mb-1">Дәлдік көрсеткіші</span>
+                        <span id="accuracyPercent" class="font-heading font-black text-4xl text-emerald-600">100%</span>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 flex flex-col items-center">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider mb-1">ПӘК Бағасы</span>
+                        <span id="efficiencyBadge" class="font-heading font-black text-3xl text-amber-600">MAX</span>
+                    </div>
+                </div>
+
+                <!-- Батырмалар -->
+                <div class="flex flex-wrap items-center justify-center gap-3">
+                    <button onclick="restartGame()" class="touch-action-btn px-7 py-3.5 rounded-2xl font-heading font-black text-sm sm:text-base tracking-wider uppercase text-white bg-gradient-to-r from-brand-orange to-brand-blue flex items-center gap-3 cursor-pointer">
+                        <i class="fa-solid fa-rotate-right text-base"></i>
+                        <span>ҚАЙТА ОЙНАУ</span>
+                    </button>
+                    <button onclick="shareResults()" class="px-7 py-3.5 rounded-2xl bg-white border-2 border-slate-300 text-slate-700 font-heading font-black text-sm sm:text-base tracking-wider uppercase hover:border-brand-blue hover:text-brand-blue transition-all flex items-center gap-3 cursor-pointer shadow-sm">
+                        <i class="fa-solid fa-share-nodes text-base"></i>
+                        <span>НӘТИЖЕНІ БӨЛІСУ</span>
+                    </button>
+                </div>
+
+                <div id="copyToast" class="hidden mt-3 inline-block px-4 py-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold">
+                    Нәтиже алмасу буферіне көшірілді!
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="relative z-20 w-full py-2.5 text-center text-xs font-bold text-slate-400 border-t border-slate-200 bg-white/60">
+        8-сынып Физика: «Жылу қозғалтқыштарының ПӘК-і» • ENERGY BATTLE (25 сұрақ)
+    </footer>
+
+    <!-- ================= JAVASCRIPT ================= -->
+    <script>
+        /* ----------------------------------------------------
+           1. СҰРАҚТАР БАЗАСЫ (ДҰРЫС ЖАУАПТАРЫ ӘР ТҮРЛІ НҰСҚАДА: A, B, C, D)
+        ---------------------------------------------------- */
+        const quizData = [
+            {
+                id: 1,
+                question: "Жылу қозғалтқышы қандай энергияны механикалық жұмысқа айналдырады?",
+                category: "НЕГІЗГІ ҰҒЫМ",
+                options: [
+                    "Тек дыбыс энергиясын",
+                    "Отынның ішкі (жылу) энергиясын",
+                    "Тек жарық сәулесін",
+                    "Ядролық тартылыс энергиясын"
+                ],
+                correct: 1,
+                explanation: "Жылу қозғалтқышы отын жанғанда бөлінетін ішкі энергияны механикалық қозғалысқа айналдырады.",
+                caption: "FIG 1.0 — ЭНЕРГИЯНЫҢ ТҮРЛЕНУІ",
+                visualType: "concept"
+            },
+            {
+                id: 2,
+                question: "Жылу қозғалтқышы жұмыс істеуі үшін міндетті 3 негізгі бөлігі қандай?",
+                category: "ҚҰРЫЛЫСЫ",
+                options: [
+                    "Дөңгелек, руль, тежегіш",
+                    "Батарея, шам, сым",
+                    "Қыздырғыш, жұмыстық дене, салқындатқыш",
+                    "Су, май, сүзгі"
+                ],
+                correct: 2,
+                explanation: "Кез келген жылу қозғалтқышында: Қыздырғыш (жылу беретін), Жұмыстық дене (газ/бу) және Салқындатқыш болады.",
+                caption: "FIG 2.0 — 3 НЕГІЗГІ ҚҰРАУЫШ",
+                visualType: "parts"
+            },
+            {
+                id: 3,
+                question: "Пайдалы әрекет коэффициенті (ПӘК) физикада қай грек әрпімен белгіленеді?",
+                category: "БЕЛГІЛЕУ",
+                options: [
+                    "ρ (ро)",
+                    "λ (лямбда)",
+                    "μ (мю)",
+                    "η (эта)"
+                ],
+                correct: 3,
+                explanation: "ПӘК физикада гректің η (эта) әрпімен таңбаланады.",
+                caption: "FIG 3.0 — ГРЕК ӘРПІ: η",
+                visualType: "efficiency"
+            },
+            {
+                id: 4,
+                question: "ПӘК әдетте қандай бірлікпен көрсетіледі?",
+                category: "ӨЛШЕМ БІРЛІК",
+                options: [
+                    "Пайызбен (%) немесе өлшемсіз бөлшекпен",
+                    "Килограмммен (кг)",
+                    "Метрмен (м)",
+                    "Секундпен (с)"
+                ],
+                correct: 0,
+                explanation: "ПӘК өлшемсіз шама, көбінесе пайызбен (%) өрнектеледі.",
+                caption: "FIG 4.0 — ПАЙЫЗ БЕЛГІСІ",
+                visualType: "percent"
+            },
+            {
+                id: 5,
+                question: "Жылу қозғалтқышында жұмыстық дене ретінде көбінесе не қолданылады?",
+                category: "ЖҰМЫСТЫҚ ДЕНЕ",
+                options: [
+                    "Қатты тас",
+                    "Газ немесе су буы",
+                    "Құм",
+                    "Темір кесегі"
+                ],
+                correct: 1,
+                explanation: "Газ немесе су буы қызған кезде оңай ұлғайып, поршеньді немесе турбина қалақшасын қозғайды.",
+                caption: "FIG 5.0 — ГАЗДЫҢ ҰЛҒАЮЫ",
+                visualType: "concept"
+            },
+            {
+                id: 6,
+                question: "Кез келген нақты жылу қозғалтқышының ПӘК-і қандай болады?",
+                category: "ЗАҢДЫЛЫҚ",
+                options: [
+                    "Әрқашан 100%-ға тең",
+                    "Әрқашан 100%-дан көп",
+                    "Әрқашан 100%-дан кем (η < 100%)",
+                    "Әрқашан 200%"
+                ],
+                correct: 2,
+                explanation: "Энергияның бір бөлігі міндетті түрде салқындатқышқа кететіндіктен, ПӘК ешқашан 100% немесе одан артық болмайды.",
+                caption: "FIG 6.0 — ЭНЕРГИЯ ШЫҒЫНЫ",
+                visualType: "balance"
+            },
+            {
+                id: 7,
+                question: "ПӘК-ті табудың негізгі қарапайым формуласы қайсы?",
+                category: "ФОРМУЛА",
+                options: [
+                    "η = A + Q",
+                    "η = (A_пайдалы / Q_толық) · 100%",
+                    "η = Q / A · 0",
+                    "η = m · g · h"
+                ],
+                correct: 1,
+                explanation: "ПӘК = пайдалы жұмысты толық берілген жылуға бөліп, 100%-ға көбейту арқылы табылады.",
+                caption: "FIG 7.0 — НЕГІЗГІ ФОРМУЛА",
+                visualType: "formula"
+            },
+            {
+                id: 8,
+                question: "Автокөліктерде ең көп қолданылатын жылу қозғалтқышы қайсы?",
+                category: "ҚОЛДАНЫЛУЫ",
+                options: [
+                    "Жел диірмені",
+                    "Су диірмені",
+                    "Қол насосы",
+                    "Іштен жанатын қозғалтқыш (ІЖҚ)"
+                ],
+                correct: 3,
+                explanation: "Көптеген автокөліктер бензинмен немесе дизельмен жұмыс істейтін іштен жанатын қозғалтқышпен (ІЖҚ) жүреді.",
+                caption: "FIG 8.0 — ІЖҚ МОДЕЛІ",
+                visualType: "parts"
+            },
+            {
+                id: 9,
+                question: "Іштен жанатын 4 тактілі қозғалтқышта поршеньге күш түсіретін негізгі такті:",
+                category: "ІЖҚ ТАКТІЛЕРІ",
+                options: [
+                    "Ену (сору)",
+                    "Жұмыстық жүріс (ұлғаю)",
+                    "Сығу",
+                    "Шығару"
+                ],
+                correct: 1,
+                explanation: "Отын жанып, газ поршеньді итеретін 3-такт «жұмыстық жүріс» немесе «ұлғаю» деп аталады.",
+                caption: "FIG 9.0 — ЖҰМЫСТЫҚ ТАКТІ",
+                visualType: "concept"
+            },
+            {
+                id: 10,
+                question: "Ауызша есеп: Қозғалтқышқа 100 Дж жылу беріліп, 25 Дж пайдалы жұмыс істелді. ПӘК неше пайыз?",
+                category: "АУЫЗША ЕСЕП",
+                options: [
+                    "50%",
+                    "75%",
+                    "25%",
+                    "100%"
+                ],
+                correct: 2,
+                explanation: "η = (25 Дж / 100 Дж) · 100% = 25%. Жүзден 25 бөлігі — тура 25% болады!",
+                caption: "FIG 10.0 — ТЕЗ ЕСЕПТЕУ: 25 / 100",
+                visualType: "calc1"
+            },
+            {
+                id: 11,
+                question: "Ауызша есеп: Қозғалтқышқа 200 Дж жылу беріліп, 80 Дж пайдалы жұмыс жасалды. ПӘК-і қандай?",
+                category: "АУЫЗША ЕСЕП",
+                options: [
+                    "40%",
+                    "20%",
+                    "80%",
+                    "10%"
+                ],
+                correct: 0,
+                explanation: "η = (80 / 200) · 100% = 40%.",
+                caption: "FIG 11.0 — 80 / 200 = 40%",
+                visualType: "calc1"
+            },
+            {
+                id: 12,
+                question: "Жылу қозғалтқышында салқындатқыштың басты қызметі қандай?",
+                category: "САЛҚЫНДАТҚЫШ",
+                options: [
+                    "Қозғалтқышты мүлдем тоқтатып тастау",
+                    "Газды суытып, қозғалтқыштың қайта бастапқы күйге келуін қамтамасыз ету",
+                    "Жанармайды өзі жағу",
+                    "Электр тогын жинақтау"
+                ],
+                correct: 1,
+                explanation: "Цикл үздіксіз қайталануы үшін жұмыстық денені салқындатып, бастапқы қалпына келтіру қажет.",
+                caption: "FIG 12.0 — САЛҚЫНДАТУ ТҰЙЫҚТАЛУЫ",
+                visualType: "parts"
+            },
+            {
+                id: 13,
+                question: "Жылу қозғалтқыштарында неге 100% ПӘК алу мүмкін емес?",
+                category: "ФИЗИКА ЗАҢЫ",
+                options: [
+                    "Отын тым жақсы болғандықтан",
+                    "Табиғатта ауа болғандықтан",
+                    "Жылудың бір бөлігі салқындатқышқа және үйкеліске міндетті түрде кетеді",
+                    "Поршень тым жеңіл болғандықтан"
+                ],
+                correct: 2,
+                explanation: "Термодинамика заңы бойынша жылудың бір бөлігі сөзсіз салқын ортаға беріледі.",
+                caption: "FIG 13.0 — ТЕРМОДИНАМИКА ЕРЕЖЕСІ",
+                visualType: "balance"
+            },
+            {
+                id: 14,
+                question: "Жылу қозғалтқышының ПӘК-ін арттырудың ең тиімді тәсілі:",
+                category: "ТИІМДІЛІК",
+                options: [
+                    "Үйкелісті көбейту",
+                    "Қозғалтқышты толық орап тастау",
+                    "Отынды жақпай қою",
+                    "Қыздырғыш температурасын көтеріп, салқындатқыш температурасын төмендету"
+                ],
+                correct: 3,
+                explanation: "Қыздырғыш пен салқындатқыш арасындағы температура айырмасы неғұрлым үлкен болса, ПӘК соғұрлым жоғары болады.",
+                caption: "FIG 14.0 — ТЕМПЕРАТУРА АЙЫРМАСЫ",
+                visualType: "efficiency"
+            },
+            {
+                id: 15,
+                question: "Ауызша есеп: Қозғалтқыштың ПӘК-і 50%. Оған 1000 Дж жылу берілсе, ол қанша пайдалы жұмыс істейді?",
+                category: "АУЫЗША ЕСЕП",
+                options: [
+                    "1000 Дж",
+                    "500 Дж",
+                    "200 Дж",
+                    "50 Дж"
+                ],
+                correct: 1,
+                explanation: "50% дегеніміз тура жартысы! 1000 Дж-дың жартысы: 500 Дж пайдалы жұмыс.",
+                caption: "FIG 15.0 — ЖАРТЫСЫ = 50%",
+                visualType: "calc2"
+            },
+            {
+                id: 16,
+                question: "Жылу электр станцияларында (ЖЭС) генераторды айналдыру үшін қандай қондырғы қолданылады?",
+                category: "ТЕХНИКА",
+                options: [
+                    "Бу турбинасы",
+                    "Қол бұрғысы",
+                    "Сағат серіппесі",
+                    "Велосипед шынжыры"
+                ],
+                correct: 0,
+                explanation: "ЖЭС-терде қатты қысымдағы су буы қуатты бу турбинасының қалақшаларын айналдырады.",
+                caption: "FIG 16.0 — БУ ТУРБИНАСЫ",
+                visualType: "parts"
+            },
+            {
+                id: 17,
+                question: "Ұшақтар мен зымырандарда жылу қозғалтқышының қай түрі қолданылады?",
+                category: "АВИАЦИЯ",
+                options: [
+                    "Бу машинасы",
+                    "Жел диірмені",
+                    "Реактивті қозғалтқыш",
+                    "Су доңғалағы"
+                ],
+                correct: 2,
+                explanation: "Реактивті қозғалтқыштар газдың зор жылдамдықпен сыртқа атылып шығуы есебінен ұшаққа екпін береді.",
+                caption: "FIG 17.0 — РЕАКТИВТІ ҚОЗҒАЛЫС",
+                visualType: "concept"
+            },
+            {
+                id: 18,
+                question: "Идеал жылу қозғалтқышының циклін (ең жоғарғы мүмкін ПӘК) ұсынған француз ғалымы кім?",
+                category: "ҒАЛЫМДАР",
+                options: [
+                    "Исаак Ньютон",
+                    "Архимед",
+                    "Альберт Эйнштейн",
+                    "Сади Карно"
+                ],
+                correct: 3,
+                explanation: "Сади Карно 1824 жылы идеал жылу машинасының циклін ашып, максималды мүмкін ПӘК формуласын жасады.",
+                caption: "FIG 18.0 — КАРНО ЦИКЛІ",
+                visualType: "formula"
+            },
+            {
+                id: 19,
+                question: "Жылу қозғалтқыштарының қоршаған ортаға тигізетін басты кері әсері қандай?",
+                category: "ЭКОЛОГИЯ",
+                options: [
+                    "Пайдаланылған зиянды газдар мен жылудың ауаға шығуы (парниктік әсер)",
+                    "Жердің айналуын тоқтатуы",
+                    "Күн сәулесін жоғалтуы",
+                    "Теңіз толқындарын басуы"
+                ],
+                correct: 0,
+                explanation: "Отын жанғанда түтін және көмірқышқыл газы шығып ауаны ластайды.",
+                caption: "FIG 19.0 — ЭКОЛОГИЯ МӘСЕЛЕСІ",
+                visualType: "balance"
+            },
+            {
+                id: 20,
+                question: "Ауызша есеп: Қозғалтқышқа 500 Дж жылу берілді. Оның 400 Дж-ы салқындатқышқа кетсе, пайдалы жұмыс қанша?",
+                category: "АУЫЗША ЕСЕП",
+                options: [
+                    "900 Дж",
+                    "100 Дж",
+                    "400 Дж",
+                    "500 Дж"
+                ],
+                correct: 1,
+                explanation: "Пайдалы жұмыс A = Q₁ - Q₂ = 500 Дж - 400 Дж = 100 Дж.",
+                caption: "FIG 20.0 — АЙЫРЫМ: 500 - 400 = 100",
+                visualType: "calc1"
+            },
+            {
+                id: 21,
+                question: "Дизель қозғалтқышының бензинді қозғалтқыштан басты ерекшелігі қандай?",
+                category: "ІЖҚ ТҮРЛЕРІ",
+                options: [
+                    "Ол мүлдем жанармай қажет етпейді",
+                    "Ол тек қыста жұмыс істейді",
+                    "Жанармай сығылған ауаның қатты қызуынан өздігінен тұтанады (оттық білтесіз)",
+                    "Оның поршені болмайды"
+                ],
+                correct: 2,
+                explanation: "Дизельде ауа цилиндр ішінде қатты қысылып қызады да, жанармай бүркілгенде өздігінен тұтанады.",
+                caption: "FIG 21.0 — ДИЗЕЛЬ ПРИНЦИПІ",
+                visualType: "parts"
+            },
+            {
+                id: 22,
+                question: "Қазіргі қарапайым бензинді автомобиль қозғалтқыштарының орташа ПӘК-і шамамен қандай?",
+                category: "ШЫНАЙЫ ПӘК",
+                options: [
+                    "95% – 99%",
+                    "25% – 35%",
+                    "5% – 8%",
+                    "150%"
+                ],
+                correct: 1,
+                explanation: "Бензинмен жүретін машина қозғалтқыштарының ПӘК-і шамамен 25-30% төңірегінде болады.",
+                caption: "FIG 22.0 — АВТО ПӘК КӨРСЕТКІШІ",
+                visualType: "percent"
+            },
+            {
+                id: 23,
+                question: "Жылу қозғалтқыштарында тетіктердің тозуын және үйкелісін азайту үшін не қолданылады?",
+                category: "ТЕХНИКА",
+                options: [
+                    "Құрғақ құм себу",
+                    "Қар салу",
+                    "Көмір шашу",
+                    "Арнайы мотор майлары (майлау)"
+                ],
+                correct: 3,
+                explanation: "Мотор майы үйкеліс шығынын азайтып, қозғалтқыштың ПӘК-ін және өмірін ұзартады.",
+                caption: "FIG 23.0 — МАЙЛАУ ЖҮЙЕСІ",
+                visualType: "concept"
+            },
+            {
+                id: 24,
+                question: "Ауызша есеп: Қозғалтқыш ПӘК-і 10%. Оған 500 Дж жылу берілсе, қанша пайдалы жұмыс атқарады?",
+                category: "АУЫЗША ЕСЕП",
+                options: [
+                    "50 Дж",
+                    "5 Дж",
+                    "100 Дж",
+                    "250 Дж"
+                ],
+                correct: 0,
+                explanation: "10% дегеніміз санның оннан бірі! 500 Дж / 10 = 50 Дж.",
+                caption: "FIG 24.0 — 500-ДІҢ 10%-Ы = 50 ДЖ",
+                visualType: "calc2"
+            },
+            {
+                id: 25,
+                question: "Жылу қозғалтқышында энергияның сақталу заңы қалай көрінеді?",
+                category: "ФИЗИКА ЗАҢЫ",
+                options: [
+                    "Энергия біржола жоқ болып кетеді",
+                    "Энергия көбейіп кетеді",
+                    "Энергия жоғалмайды, ол механикалық жұмысқа және қоршаған орта жылуына ауысады",
+                    "Энергия салмаққа айналып құлайды"
+                ],
+                correct: 2,
+                explanation: "Энергияның сақталу заңы бойынша: Q₁ = A_пайдалы + Q₂ (ешқандай энергия жоғалмайды).",
+                caption: "FIG 25.0 — ЭНЕРГИЯ САҚТАЛУЫ",
+                visualType: "balance"
+            }
+        ];
+
+        /* ----------------------------------------------------
+           2. ТАҚТА БЕТІНЕ ЖАЗУ ҚҰРАЛЫ (Smart Pen)
+        ---------------------------------------------------- */
+        let isPenActive = false;
+        let isDrawing = false;
+        let penColor = '#ef4444';
+        let drawCanvas, drawCtx;
+
+        function initDrawCanvas() {
+            drawCanvas = document.getElementById('drawingCanvas');
+            drawCtx = drawCanvas.getContext('2d');
+            resizeDrawCanvas();
+            window.addEventListener('resize', resizeDrawCanvas);
+
+            const startDraw = (e) => {
+                if (!isPenActive) return;
+                isDrawing = true;
+                const pos = getPos(e);
+                drawCtx.beginPath();
+                drawCtx.moveTo(pos.x, pos.y);
+            };
+
+            const draw = (e) => {
+                if (!isPenActive || !isDrawing) return;
+                e.preventDefault();
+                const pos = getPos(e);
+                drawCtx.lineTo(pos.x, pos.y);
+                drawCtx.strokeStyle = penColor;
+                drawCtx.lineWidth = 4;
+                drawCtx.lineCap = 'round';
+                drawCtx.lineJoin = 'round';
+                drawCtx.stroke();
+            };
+
+            const stopDraw = () => {
+                if (!isPenActive) return;
+                isDrawing = false;
+                drawCtx.closePath();
+            };
+
+            drawCanvas.addEventListener('mousedown', startDraw);
+            drawCanvas.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stopDraw);
+
+            drawCanvas.addEventListener('touchstart', startDraw, { passive: false });
+            drawCanvas.addEventListener('touchmove', draw, { passive: false });
+            window.addEventListener('touchend', stopDraw);
+        }
+
+        function resizeDrawCanvas() {
+            if (!drawCanvas) return;
+            drawCanvas.width = window.innerWidth;
+            drawCanvas.height = window.innerHeight;
+        }
+
+        function getPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function toggleBoardPen() {
+            playSound('click');
+            isPenActive = !isPenActive;
+            const btn = document.getElementById('penToggleBtn');
+            const colorGroup = document.getElementById('penColorGroup');
+            const canvasEl = document.getElementById('drawingCanvas');
+
+            if (isPenActive) {
+                btn.classList.add('bg-brand-blue', 'text-white', 'border-brand-blue');
+                btn.classList.remove('text-slate-600', 'bg-white');
+                colorGroup.classList.remove('hidden');
+                canvasEl.classList.add('pen-active');
+            } else {
+                btn.classList.remove('bg-brand-blue', 'text-white', 'border-brand-blue');
+                btn.classList.add('text-slate-600', 'bg-white');
+                colorGroup.classList.add('hidden');
+                canvasEl.classList.remove('pen-active');
+            }
+        }
+
+        function setPenColor(color) {
+            playSound('click');
+            penColor = color;
+        }
+
+        function clearBoardDrawings() {
+            playSound('click');
+            if (drawCtx && drawCanvas) {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            }
+        }
+
+        function toggleFullScreen() {
+            playSound('click');
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           3. ТЕСТТІ БАСҚАРУ
+        ---------------------------------------------------- */
+        let currentQuestionIndex = 0;
+        let userScore = 0;
+        let userAnswers = new Array(quizData.length).fill(null);
+        let answeredQuestions = new Array(quizData.length).fill(false);
+        let studentName = "8-Сынып Оқушысы";
+
+        function startGame() {
+            playSound('click');
+            const nameInput = document.getElementById('studentNameInput');
+            if (nameInput && nameInput.value.trim() !== '') {
+                studentName = nameInput.value.trim();
+            }
+
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('quizScreen').classList.remove('hidden');
+            document.getElementById('topCounterBadge').classList.remove('hidden');
+            document.getElementById('topCounterBadge').classList.add('flex');
+            document.getElementById('topScoreBadge').classList.remove('hidden');
+            document.getElementById('topScoreBadge').classList.add('flex');
+            
+            loadQuestion(0);
+        }
+
+        function loadQuestion(index) {
+            currentQuestionIndex = index;
+            const q = quizData[index];
+
+            // Прогресс
+            document.getElementById('currentQNumBadge').innerText = index + 1;
+            document.getElementById('currentStepText').innerText = `${index + 1}-сұрақ / 25`;
+            const progressPercent = ((index + 1) / 25) * 100;
+            document.getElementById('progressBarFill').style.width = `${progressPercent}%`;
+            document.getElementById('progressPercentage').innerText = `${progressPercent.toFixed(0)}%`;
+
+            // Мәтіндер
+            document.getElementById('questionCategory').innerText = q.category;
+            document.getElementById('questionText').innerText = q.question;
+            document.getElementById('visualCaption').innerText = q.caption;
+
+            // Иллюстрацияны салу
+            const visualContainer = document.getElementById('visualDisplayContainer');
+            visualContainer.innerHTML = getVisualHTML(q.visualType, q);
+
+            // Жауап нұсқалары
+            const answersGrid = document.getElementById('answersGrid');
+            answersGrid.innerHTML = '';
+
+            const isAlreadyAnswered = answeredQuestions[index];
+            const savedChoice = userAnswers[index];
+
+            q.options.forEach((opt, optIndex) => {
+                const btn = document.createElement('button');
+                const letters = ['A', 'B', 'C', 'D'];
+                
+                let stateClass = '';
+                let iconHtml = `<span class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-100 flex items-center justify-center font-heading font-black text-brand-blue shrink-0 border-2 border-sky-300 text-sm sm:text-base">${letters[optIndex]}</span>`;
+
+                if (isAlreadyAnswered) {
+                    btn.disabled = true;
+                    if (optIndex === q.correct) {
+                        stateClass = 'option-correct font-bold';
+                        iconHtml = `<span class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm text-base"><i class="fa-solid fa-check"></i></span>`;
+                    } else if (savedChoice === optIndex) {
+                        stateClass = 'option-wrong font-bold';
+                        iconHtml = `<span class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm text-base"><i class="fa-solid fa-xmark"></i></span>`;
+                    } else {
+                        stateClass = 'opacity-40 border-slate-200 bg-white';
+                    }
+                }
+
+                btn.className = `touch-option w-full text-left p-3.5 sm:p-4 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-between gap-3 cursor-pointer select-none ${stateClass}`;
+                btn.innerHTML = `
+                    <div class="flex items-center gap-3 flex-1">
+                        ${iconHtml}
+                        <span class="leading-snug">${opt}</span>
+                    </div>
+                `;
+
+                if (!isAlreadyAnswered) {
+                    btn.onclick = () => selectAnswer(optIndex);
+                }
+
+                answersGrid.appendChild(btn);
+            });
+
+            // Түсіндірме мәтін
+            const banner = document.getElementById('explanationBanner');
+            if (isAlreadyAnswered) {
+                banner.classList.remove('hidden');
+                const isCorrect = savedChoice === q.correct;
+                banner.className = `mt-2 p-3 sm:p-4 rounded-2xl border-2 flex items-start gap-3 ${
+                    isCorrect ? 'border-emerald-300 bg-emerald-50 text-emerald-950' : 'border-rose-300 bg-rose-50 text-rose-950'
+                }`;
+                document.getElementById('explanationIcon').className = `text-2xl mt-0.5 ${
+                    isCorrect ? 'fa-solid fa-circle-check text-emerald-600' : 'fa-solid fa-circle-xmark text-rose-600'
+                }`;
+                document.getElementById('explanationTitle').innerText = isCorrect ? 'Дұрыс Жауап!' : 'Есте сақтаңыз:';
+                document.getElementById('explanationTitle').className = `font-heading font-black uppercase mb-0.5 ${
+                    isCorrect ? 'text-emerald-700' : 'text-rose-700'
+                }`;
+                document.getElementById('explanationBody').innerText = q.explanation;
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            document.getElementById('prevBtn').disabled = index === 0;
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.disabled = !isAlreadyAnswered;
+
+            if (index === quizData.length - 1) {
+                document.getElementById('nextBtnText').innerText = "НӘТИЖЕНІ КӨРУ";
+            } else {
+                document.getElementById('nextBtnText').innerText = "КЕЛЕСІ СҰРАҚ";
+            }
+        }
+
+        function selectAnswer(selectedIndex) {
+            const q = quizData[currentQuestionIndex];
+            answeredQuestions[currentQuestionIndex] = true;
+            userAnswers[currentQuestionIndex] = selectedIndex;
+
+            const isCorrect = selectedIndex === q.correct;
+            if (isCorrect) {
+                userScore++;
+                document.getElementById('scoreBadgeValue').innerText = userScore;
+                playSound('correct');
+            } else {
+                playSound('wrong');
+            }
+
+            loadQuestion(currentQuestionIndex);
+        }
+
+        function nextQuestion() {
+            playSound('click');
+            if (currentQuestionIndex < quizData.length - 1) {
+                loadQuestion(currentQuestionIndex + 1);
+            } else {
+                showResults();
+            }
+        }
+
+        function prevQuestion() {
+            playSound('click');
+            if (currentQuestionIndex > 0) {
+                loadQuestion(currentQuestionIndex - 1);
+            }
+        }
+
+        function showResults() {
+            playSound('win');
+            document.getElementById('quizScreen').classList.add('hidden');
+            document.getElementById('resultsScreen').classList.remove('hidden');
+
+            document.getElementById('studentNameDisplay').innerText = `ҚАТЫСУШЫ: ${studentName}`;
+            document.getElementById('finalScoreNumber').innerText = userScore;
+
+            const percent = Math.round((userScore / quizData.length) * 100);
+            document.getElementById('accuracyPercent').innerText = `${percent}%`;
+
+            const rankTitle = document.getElementById('resultRankTitle');
+            const rankSub = document.getElementById('resultRankSubtitle');
+            const effBadge = document.getElementById('efficiencyBadge');
+            const badgeIcon = document.getElementById('badgeFaIcon');
+
+            if (userScore >= 22) {
+                rankTitle.innerText = "ЭНЕРГИЯ САРАПШЫСЫ!";
+                rankSub.innerText = "Ғаламат нәтиже! Жылу қозғалтқыштары мен ПӘК тақырыбын мінсіз меңгердіңіз!";
+                effBadge.innerText = "MAX";
+                badgeIcon.className = "fa-solid fa-crown text-3xl";
+                if (window.confetti) {
+                    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                }
+            } else if (userScore >= 16) {
+                rankTitle.innerText = "КЕРЕМЕТ НӘТИЖЕ!";
+                rankSub.innerText = "Жарайсыз! Жылу машиналарының жұмысын өте жақсы білесіз!";
+                effBadge.innerText = "ЖОҒАРЫ";
+                badgeIcon.className = "fa-solid fa-medal text-3xl";
+            } else if (userScore >= 10) {
+                rankTitle.innerText = "ЖАҚСЫ, ТАҒЫ ҚАЙТАЛА!";
+                rankSub.innerText = "Жақсы талпыныс! Сұрақтарды тағы бір рет байқап көріңіз.";
+                effBadge.innerText = "ОРТАША";
+                badgeIcon.className = "fa-solid fa-bolt-lightning text-3xl";
+            } else {
+                rankTitle.innerText = "ЖАТТЫҒУДЫ ЖАЛҒАСТЫР!";
+                rankSub.innerText = "Тақырыпты тағы да бір рет қайталап көруге кеңес береміз.";
+                effBadge.innerText = "ТӨМЕН";
+                badgeIcon.className = "fa-solid fa-fire text-3xl";
+            }
+        }
+
+        function restartGame() {
+            playSound('click');
+            currentQuestionIndex = 0;
+            userScore = 0;
+            userAnswers = new Array(quizData.length).fill(null);
+            answeredQuestions = new Array(quizData.length).fill(false);
+            document.getElementById('scoreBadgeValue').innerText = "0";
+
+            clearBoardDrawings();
+            document.getElementById('resultsScreen').classList.add('hidden');
+            document.getElementById('quizScreen').classList.remove('hidden');
+            loadQuestion(0);
+        }
+
+        function shareResults() {
+            playSound('click');
+            const shareText = `ENERGY BATTLE — «Жылу қозғалтқыштарының ПӘК-і» (25 сұрақ) нәтижесі: ${studentName} — ${userScore}/25 (${Math.round((userScore/25)*100)}%)!`;
+            
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = shareText;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+
+            const toast = document.getElementById('copyToast');
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        }
+
+        /* ----------------------------------------------------
+           4. ДЫБЫСТАР (Web Audio API)
+        ---------------------------------------------------- */
+        let audioCtx = null;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+        }
+
+        function playSound(type) {
+            if (isMuted) return;
+            try {
+                initAudio();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const now = audioCtx.currentTime;
+
+                if (type === 'correct') {
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+                        gain.gain.setValueAtTime(0.12, now + idx * 0.07);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.35);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + idx * 0.07);
+                        osc.stop(now + idx * 0.07 + 0.35);
+                    });
+                } else if (type === 'wrong') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(110, now + 0.25);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'click') {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(700, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.04);
+                } else if (type === 'win') {
+                    [440, 554.37, 659.25, 880].forEach((freq, i) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.09);
+                        gain.gain.setValueAtTime(0.15, now + i * 0.09);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.6);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + i * 0.09);
+                        osc.stop(now + i * 0.09 + 0.6);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function toggleAudio() {
+            isMuted = !isMuted;
+            const icon = document.getElementById('soundIcon');
+            if (isMuted) {
+                icon.className = 'fa-solid fa-volume-xmark text-lg text-rose-500';
+            } else {
+                icon.className = 'fa-solid fa-volume-high text-lg text-slate-700';
+                playSound('click');
+            }
+        }
+
+        /* ----------------------------------------------------
+           5. АШЫҚ ДИЗАЙНДАҒЫ SVG ИЛЛЮСТРАЦИЯЛАР
+        ---------------------------------------------------- */
+        function getVisualHTML(type, q) {
+            switch(type) {
+                case 'parts':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <rect x="30" y="15" width="320" height="50" rx="12" fill="#ffedd5" stroke="#f97316" stroke-width="2" />
+                        <text x="190" y="45" fill="#c2410c" font-family="Comfortaa" font-size="13" font-weight="bold" text-anchor="middle">1. ҚЫЗДЫРҒЫШ (T₁, Q₁)</text>
+                        <path d="M 190 68 L 190 98" stroke="#f97316" stroke-width="3" stroke-dasharray="5,4" />
+                        <g transform="translate(80, 100)">
+                            <rect width="220" height="60" rx="14" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" />
+                            <text x="110" y="35" fill="#4338ca" font-family="Comfortaa" font-size="13" font-weight="bold" text-anchor="middle">2. ЖҰМЫСТЫҚ ДЕНЕ</text>
+                        </g>
+                        <path d="M 305 130 L 340 130" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
+                        <text x="325" y="150" fill="#047857" font-family="Space Grotesk" font-size="12" font-weight="bold">A_п</text>
+                        <path d="M 190 162 L 190 192" stroke="#0284c7" stroke-width="3" stroke-dasharray="5,4" />
+                        <rect x="30" y="195" width="320" height="50" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2" />
+                        <text x="190" y="225" fill="#0369a1" font-family="Comfortaa" font-size="13" font-weight="bold" text-anchor="middle">3. САЛҚЫНДАТҚЫШ (T₂, Q₂)</text>
+                    </svg>`;
+                
+                case 'efficiency':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <circle cx="190" cy="120" r="75" fill="#ffffff" stroke="#e2e8f0" stroke-width="12" />
+                        <circle cx="190" cy="120" r="75" fill="none" stroke="#10b981" stroke-width="12" stroke-dasharray="471" stroke-dashoffset="280" stroke-linecap="round" />
+                        <text x="190" y="115" fill="#64748b" font-family="Comfortaa" font-size="12" font-weight="bold" text-anchor="middle">ТИІМДІЛІК</text>
+                        <text x="190" y="145" fill="#0f172a" font-family="Comfortaa" font-size="30" font-weight="900" text-anchor="middle">η (ПӘК)</text>
+                        <rect x="60" y="215" width="260" height="34" rx="10" fill="#dcfce7" stroke="#16a34a" />
+                        <text x="190" y="237" fill="#15803d" font-family="Nunito" font-size="13" font-weight="bold" text-anchor="middle">Пайдалы жұмыс / Берілген жылу</text>
+                    </svg>`;
+
+                case 'formula':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <rect x="20" y="20" width="340" height="220" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" />
+                        <text x="190" y="50" fill="#0284c7" font-family="Comfortaa" font-size="14" font-weight="bold" text-anchor="middle">ПӘК НЕГІЗГІ ФОРМУЛАСЫ</text>
+                        <g transform="translate(60, 75)">
+                            <rect width="260" height="70" rx="12" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+                            <text x="35" y="42" fill="#ea580c" font-family="Comfortaa" font-size="24" font-weight="bold">η =</text>
+                            <text x="120" y="30" fill="#16a34a" font-family="Space Grotesk" font-size="18" font-weight="bold" text-anchor="middle">A_п</text>
+                            <line x1="95" y1="38" x2="145" y2="38" stroke="#0f172a" stroke-width="2" />
+                            <text x="120" y="58" fill="#ea580c" font-family="Space Grotesk" font-size="18" font-weight="bold" text-anchor="middle">Q₁</text>
+                            <text x="185" y="42" fill="#0f172a" font-family="Space Grotesk" font-size="18" font-weight="bold">· 100%</text>
+                        </g>
+                        <rect x="40" y="165" width="300" height="50" rx="10" fill="#f0f9ff" stroke="#38bdf8" />
+                        <text x="190" y="195" fill="#0369a1" font-family="Nunito" font-size="13" font-weight="bold" text-anchor="middle">A_п = Q₁ - Q₂ (Пайдалы жұмыс)</text>
+                    </svg>`;
+
+                case 'percent':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <circle cx="190" cy="115" r="65" fill="#f0f9ff" stroke="#0284c7" stroke-width="3" />
+                        <text x="190" y="145" fill="#0284c7" font-family="Comfortaa" font-size="80" font-weight="900" text-anchor="middle">%</text>
+                        <rect x="40" y="200" width="300" height="40" rx="10" fill="#e0f2fe" stroke="#38bdf8" />
+                        <text x="190" y="225" fill="#0369a1" font-family="Nunito" font-size="13" font-weight="bold" text-anchor="middle">ӨЛШЕМСІЗ ШАМА (ПАЙЫЗБЕН %)</text>
+                    </svg>`;
+
+                case 'balance':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <path d="M 40 90 L 160 90" stroke="#f97316" stroke-width="22" stroke-linecap="round" />
+                        <text x="80" y="70" fill="#ea580c" font-family="Comfortaa" font-size="13" font-weight="bold">Q₁ (100%)</text>
+                        <circle cx="170" cy="90" r="14" fill="#8b5cf6" />
+                        <path d="M 170 90 Q 230 90 310 50" stroke="#10b981" stroke-width="12" fill="none" stroke-linecap="round" />
+                        <text x="240" y="38" fill="#059669" font-family="Space Grotesk" font-size="12" font-weight="bold">A_п (Пайдалы)</text>
+                        <path d="M 170 90 Q 230 90 310 145" stroke="#0284c7" stroke-width="15" fill="none" stroke-linecap="round" />
+                        <text x="240" y="170" fill="#0284c7" font-family="Space Grotesk" font-size="12" font-weight="bold">Q₂ (Шығын)</text>
+                        <rect x="40" y="200" width="300" height="42" rx="10" fill="#fee2e2" stroke="#ef4444" />
+                        <text x="190" y="226" fill="#b91c1c" font-family="Comfortaa" font-size="13" font-weight="bold" text-anchor="middle">A_п &lt; Q₁ (η &lt; 100%)</text>
+                    </svg>`;
+
+                case 'calc1':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <rect x="25" y="20" width="330" height="220" rx="16" fill="#f8fafc" stroke="#f59e0b" stroke-width="2" />
+                        <text x="190" y="50" fill="#d97706" font-family="Comfortaa" font-size="14" font-weight="bold" text-anchor="middle">АУЫЗША ТЕЗ ЕСЕПТЕУ</text>
+                        <g transform="translate(45, 75)">
+                            <rect width="290" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" />
+                            <text x="145" y="36" fill="#0284c7" font-family="Space Grotesk" font-size="16" font-weight="bold" text-anchor="middle">η = (A_пайдалы / Q₁) · 100%</text>
+                        </g>
+                        <g transform="translate(45, 150)">
+                            <rect width="290" height="70" rx="14" fill="#dbeafe" stroke="#3b82f6" />
+                            <text x="145" y="44" fill="#1e40af" font-family="Comfortaa" font-size="22" font-weight="900" text-anchor="middle">ТЕЗ ШЕШІМ ✓</text>
+                        </g>
+                    </svg>`;
+
+                case 'calc2':
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <rect x="25" y="20" width="330" height="220" rx="16" fill="#f8fafc" stroke="#10b981" stroke-width="2" />
+                        <text x="190" y="50" fill="#047857" font-family="Comfortaa" font-size="14" font-weight="bold" text-anchor="middle">ПАЙЫЗ БОЙЫНША ЖҰМЫС</text>
+                        <g transform="translate(45, 75)">
+                            <rect width="290" height="60" rx="10" fill="#ffffff" stroke="#cbd5e1" />
+                            <text x="145" y="36" fill="#0284c7" font-family="Space Grotesk" font-size="16" font-weight="bold" text-anchor="middle">A = Q · (η / 100%)</text>
+                        </g>
+                        <g transform="translate(45, 150)">
+                            <rect width="290" height="70" rx="14" fill="#dcfce7" stroke="#16a34a" />
+                            <text x="145" y="44" fill="#15803d" font-family="Comfortaa" font-size="22" font-weight="900" text-anchor="middle">ЖҰМЫС ТАБЫЛДЫ ✓</text>
+                        </g>
+                    </svg>`;
+
+                default: // concept
+                    return `
+                    <svg viewBox="0 0 380 260" class="w-full max-h-56 filter drop-shadow">
+                        <g transform="translate(40, 60)">
+                            <rect width="80" height="120" rx="12" fill="#ffedd5" stroke="#f97316" stroke-width="2" />
+                            <text x="40" y="45" font-size="22" text-anchor="middle">🔥</text>
+                            <text x="40" y="80" fill="#9a3412" font-family="Comfortaa" font-size="11" font-weight="bold" text-anchor="middle">ЖЫЛУ</text>
+                            <text x="40" y="100" fill="#ea580c" font-family="Space Grotesk" font-size="14" font-weight="bold" text-anchor="middle">Q₁</text>
+                        </g>
+                        <g transform="translate(150, 85)">
+                            <circle cx="35" cy="35" r="32" fill="#e0f2fe" stroke="#0284c7" stroke-width="2.5" />
+                            <circle cx="35" cy="35" r="14" fill="none" stroke="#8b5cf6" stroke-width="3" stroke-dasharray="5,3" />
+                        </g>
+                        <g transform="translate(250, 60)">
+                            <rect width="80" height="120" rx="12" fill="#ecfeff" stroke="#06b6d4" stroke-width="2" />
+                            <text x="40" y="45" font-size="22" text-anchor="middle">⚙️</text>
+                            <text x="40" y="80" fill="#0e7490" font-family="Comfortaa" font-size="11" font-weight="bold" text-anchor="middle">ЖҰМЫС</text>
+                            <text x="40" y="100" fill="#0891b2" font-family="Space Grotesk" font-size="14" font-weight="bold" text-anchor="middle">A_п</text>
+                        </g>
+                        <rect x="40" y="200" width="290" height="40" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+                        <text x="185" y="225" fill="#64748b" font-family="Nunito" font-size="12" font-weight="bold" text-anchor="middle">Ішкі энергия ➔ Механикалық қозғалыс</text>
+                    </svg>`;
+            }
+        }
+
+        /* ----------------------------------------------------
+           6. THREE.JS 3D ТУРБИНА (ТУРА ОРТАДА, ТОЛЫҚ КӨРІНЕДІ)
+        ---------------------------------------------------- */
+        let scene, camera, renderer, engineGroup;
+        let rotorBlades = [];
+        let isDragging = false;
+        let prevMousePos = { x: 0, y: 0 };
+
+        function init3DHero() {
+            const canvas = document.getElementById('hero3DCanvas');
+            if (!canvas) return;
+
+            const width = canvas.clientWidth || 400;
+            const height = canvas.clientHeight || 320;
+
+            scene = new THREE.Scene();
+
+            // Камера қашықтығы турбинаның толық сыйып тұруына дәл есептелген
+            camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+            camera.position.set(0, 0, 8.2);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(5, 6, 5);
+            scene.add(dirLight);
+
+            const pointLightHeat = new THREE.PointLight(0xf97316, 2.5, 25);
+            pointLightHeat.position.set(-4, 2, 3);
+            scene.add(pointLightHeat);
+
+            const pointLightCold = new THREE.PointLight(0x0284c7, 2.5, 25);
+            pointLightCold.position.set(4, -2, 3);
+            scene.add(pointLightCold);
+
+            engineGroup = new THREE.Group();
+
+            // Корпус
+            const housingGeo = new THREE.CylinderGeometry(1.6, 1.6, 3.2, 32, 1, true);
+            const housingMat = new THREE.MeshStandardMaterial({
+                color: 0xbae6fd,
+                metalness: 0.2,
+                roughness: 0.1,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            const housingMesh = new THREE.Mesh(housingGeo, housingMat);
+            housingMesh.rotation.z = Math.PI / 2;
+            engineGroup.add(housingMesh);
+
+            // Білік
+            const shaftGeo = new THREE.CylinderGeometry(0.28, 0.28, 4.4, 24);
+            const shaftMat = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
+            shaftMesh.rotation.z = Math.PI / 2;
+            engineGroup.add(shaftMesh);
+
+            // 4 Сақиналы қалақшалар
+            rotorBlades = [];
+            for (let r = 0; r < 4; r++) {
+                const ringGroup = new THREE.Group();
+                ringGroup.position.x = -1.1 + r * 0.75;
+                const bladeNum = 12;
+                const radius = 1.25 - r * 0.1;
+
+                for (let b = 0; b < bladeNum; b++) {
+                    const bladeGeo = new THREE.BoxGeometry(0.08, radius, 0.3);
+                    const angle = (b / bladeNum) * Math.PI * 2;
+                    const bladeMat = new THREE.MeshStandardMaterial({
+                        color: r < 2 ? 0xf97316 : 0x0284c7,
+                        metalness: 0.4,
+                        roughness: 0.3
+                    });
+                    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                    blade.position.y = (radius / 2) * Math.cos(angle);
+                    blade.position.z = (radius / 2) * Math.sin(angle);
+                    blade.rotation.x = angle + 0.35;
+                    ringGroup.add(blade);
+                }
+                engineGroup.add(ringGroup);
+                rotorBlades.push(ringGroup);
+            }
+
+            // Жылу және суық белдеулері
+            const ringGlowGeo = new THREE.TorusGeometry(1.62, 0.07, 16, 64);
+            const ringGlowMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+            const glowRing = new THREE.Mesh(ringGlowGeo, ringGlowMat);
+            glowRing.rotation.y = Math.PI / 2;
+            glowRing.position.x = -1.1;
+            engineGroup.add(glowRing);
+
+            const ringColdGeo = new THREE.TorusGeometry(1.62, 0.07, 16, 64);
+            const ringColdMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
+            const coldRing = new THREE.Mesh(ringColdGeo, ringColdMat);
+            coldRing.rotation.y = Math.PI / 2;
+            coldRing.position.x = 1.15;
+            engineGroup.add(coldRing);
+
+            // Орталыққа бекіту
+            engineGroup.position.set(0, 0, 0);
+            engineGroup.rotation.y = 0.5;
+            engineGroup.rotation.x = 0.15;
+
+            scene.add(engineGroup);
+
+            // Саусақпен/тышқанмен бұру
+            const onDown = (e) => {
+                isDragging = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                prevMousePos = { x: clientX, y: clientY };
+            };
+            const onMove = (e) => {
+                if (!isDragging || !engineGroup) return;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const deltaX = clientX - prevMousePos.x;
+                const deltaY = clientY - prevMousePos.y;
+
+                engineGroup.rotation.y += deltaX * 0.008;
+                engineGroup.rotation.x += deltaY * 0.008;
+
+                prevMousePos = { x: clientX, y: clientY };
+            };
+            const onUp = () => { isDragging = false; };
+
+            canvas.addEventListener('mousedown', onDown);
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+
+            canvas.addEventListener('touchstart', onDown, { passive: true });
+            window.addEventListener('touchmove', onMove, { passive: true });
+            window.addEventListener('touchend', onUp);
+
+            window.addEventListener('resize', onWindowResize);
+            animate3D();
+        }
+
+        function onWindowResize() {
+            const canvas = document.getElementById('hero3DCanvas');
+            if (!canvas || !renderer || !camera) return;
+            const width = canvas.clientWidth;
+            const height = canvas.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        let clock = new THREE.Clock();
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            const delta = clock.getDelta();
+
+            if (rotorBlades.length > 0) {
+                rotorBlades.forEach((ring) => {
+                    ring.rotation.x += delta * 6.0;
+                });
+            }
+
+            if (!isDragging && engineGroup) {
+                engineGroup.rotation.y += delta * 0.35;
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        /* ----------------------------------------------------
+           7. ЖҮКТЕЛУ КЕЗІНДЕ ІСКЕ ҚОСУ
+        ---------------------------------------------------- */
+        window.onload = function() {
+            initDrawCanvas();
+            init3DHero();
+        };
+    </script>
+</body>
+</html>
